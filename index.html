@@ -52,6 +52,41 @@
 
   .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px;}
 
+  /* ── 비밀번호 잠금 화면 ───────────────────────────────────── */
+  .gate{
+    position:fixed;inset:0;z-index:200;background:var(--white);
+    display:flex;align-items:center;justify-content:center;padding:24px;
+    transition:opacity .3s var(--ease),visibility .3s;
+  }
+  .gate.hidden{opacity:0;visibility:hidden;}
+  .gate-card{width:100%;max-width:360px;text-align:center;}
+  .gate .g-mark{
+    width:54px;height:54px;border-radius:16px;margin:0 auto 20px;
+    background:linear-gradient(135deg,var(--blue),#4d9bff);display:grid;place-items:center;
+    color:#fff;font-weight:800;font-size:23px;
+  }
+  .gate h1{margin:0 0 8px;font-size:22px;font-weight:800;letter-spacing:-.03em;color:var(--ink-900);}
+  .gate p{margin:0 0 26px;font-size:15px;color:var(--ink-500);letter-spacing:-.01em;line-height:1.55;}
+  .gate .field{margin-bottom:10px;}
+  .gate input{
+    width:100%;font-family:inherit;font-size:16px;color:var(--ink-900);text-align:center;
+    background:var(--surface-2);border:1.5px solid transparent;border-radius:14px;
+    padding:15px 16px;letter-spacing:.04em;transition:border-color .2s,background .2s;
+  }
+  .gate input::placeholder{color:var(--ink-400);letter-spacing:-.01em;}
+  .gate input:focus{outline:none;background:var(--white);border-color:var(--blue);}
+  .gate input.err{border-color:#f04452;background:#fff5f5;}
+  .gate .msg{min-height:20px;margin-bottom:10px;font-size:13.5px;color:#f04452;font-weight:600;opacity:0;transition:opacity .2s;}
+  .gate .msg.show{opacity:1;}
+  .gate button{
+    width:100%;padding:15px;background:var(--blue);color:#fff;border-radius:14px;
+    font-size:16px;font-weight:700;letter-spacing:-.01em;transition:background .2s,transform .08s;
+  }
+  .gate button:hover{background:var(--blue-strong);}
+  .gate button:active{transform:scale(.99);}
+  @keyframes shake{10%,90%{transform:translateX(-1px);}20%,80%{transform:translateX(2px);}30%,50%,70%{transform:translateX(-5px);}40%,60%{transform:translateX(5px);}}
+  .gate .field.shake{animation:shake .4s;}
+
   /* ── Header ──────────────────────────────────────────────── */
   header.site{
     position:sticky;top:0;z-index:50;
@@ -232,6 +267,20 @@
 </head>
 <body>
 
+<!-- 비밀번호 잠금 화면 -->
+<div class="gate" id="gate">
+  <div class="gate-card">
+    <div class="g-mark">해</div>
+    <h1>해법영어수학전문학원</h1>
+    <p>원생 전용 강의실이에요.<br>비밀번호를 입력해 주세요.</p>
+    <div class="field" id="gateField">
+      <input id="gatePw" type="password" placeholder="비밀번호" autocomplete="off" aria-label="비밀번호" />
+    </div>
+    <div class="msg" id="gateMsg">비밀번호가 올바르지 않아요.</div>
+    <button id="gateBtn">들어가기</button>
+  </div>
+</div>
+
 <header class="site">
   <div class="wrap">
     <div class="brand">
@@ -296,15 +345,19 @@
 
 <script>
 /* ════════════════════════════════════════════════════════════════
-   해법영어수학전문학원 강의실
-   ── 설정 ─────────────────────────────────────────────────────────
-   구글 시트를 "웹에 게시(CSV)"한 주소를 아래 SHEET_CSV_URL 에 붙여넣으세요.
-   비워두면 아래 샘플 데이터로 화면이 표시됩니다.
-   자세한 방법은 함께 드린 README.md 참고.
-   시트 열 순서(첫 행): 제목 | 날짜 | 범주 | 유튜브ID | 설명
+   해법영어수학전문학원 강의실 · 설정
+   ─────────────────────────────────────────────────────────────────
+   ▼ 여기만 고치면 됩니다.
    ──────────────────────────────────────────────────────────────── */
 const CONFIG = {
-  SHEET_CSV_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vT4wLLuzFCkShzwnefF5uda_YwHOswhk6pU3PHxFsTOCH8_kuFtte7jci1GywT9LkC2AjVaQA-pB-Qg/pub?output=csv",   // 예: https://docs.google.com/spreadsheets/d/e/..../pub?output=csv
+  // 1) 구글 시트 "웹에 게시(CSV)" 주소
+  SHEET_CSV_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vT4wLLuzFCkShzwnefF5uda_YwHOswhk6pU3PHxFsTOCH8_kuFtte7jci1GywT9LkC2AjVaQA-pB-Qg/pub?output=csv",
+
+  // 2) 접속 비밀번호  ← 바꾸려면 이 따옴표 안만 수정
+  PASSWORD: "해법2025",
+
+  // 3) 한 번 입력하면 다시 안 묻는 시간(시간 단위). 1일 = 24
+  REMEMBER_HOURS: 24,
 };
 
 /* ── 샘플 데이터 (시트 미연결 시 화면 미리보기용) ───────────────── */
@@ -525,7 +578,50 @@ async function load(){
     render();
   }catch(err){ console.error(err); showError(); }
 }
-load();
+
+/* ── 비밀번호 잠금 ─────────────────────────────────────────────── */
+const GATE_KEY="haebeop_unlock_at";
+const gate=document.getElementById("gate");
+const gatePw=document.getElementById("gatePw");
+const gateBtn=document.getElementById("gateBtn");
+const gateMsg=document.getElementById("gateMsg");
+const gateField=document.getElementById("gateField");
+
+function isUnlocked(){
+  try{
+    const t=parseInt(localStorage.getItem(GATE_KEY)||"",10);
+    if(!t) return false;
+    return (Date.now()-t) < (CONFIG.REMEMBER_HOURS||24)*3600*1000;
+  }catch(e){ return false; }
+}
+function unlock(){
+  gate.classList.add("hidden");
+  document.body.style.overflow="";
+  load();
+}
+function tryPassword(){
+  if(gatePw.value === CONFIG.PASSWORD){
+    try{ localStorage.setItem(GATE_KEY, String(Date.now())); }catch(e){}
+    unlock();
+  }else{
+    gateMsg.classList.add("show");
+    gatePw.classList.add("err");
+    gateField.classList.remove("shake"); void gateField.offsetWidth; gateField.classList.add("shake");
+    gatePw.select();
+  }
+}
+gateBtn.addEventListener("click",tryPassword);
+gatePw.addEventListener("keydown",e=>{ if(e.key==="Enter") tryPassword(); });
+gatePw.addEventListener("input",()=>{ gateMsg.classList.remove("show"); gatePw.classList.remove("err"); });
+
+/* ── 시작 ─────────────────────────────────────────────────────── */
+if(isUnlocked()){
+  gate.classList.add("hidden");
+  load();
+}else{
+  document.body.style.overflow="hidden";
+  gatePw.focus();
+}
 </script>
 </body>
 </html>
